@@ -1,79 +1,55 @@
-#ifndef MOTORS_H
-#define MOTORS_H
+#ifndef SENSORS_H
+#define SENSORS_H
 
 #include "Config.h"
+#include <HCSR04.h> // Certifique-se de ter essa lib instalada
 
-// Estados de movimento
-enum Direcao { PARADO, FRENTE, TRAS, ESQUERDA, DIREITA };
-Direcao estadoAtual = PARADO;
+HCSR04 sensorEsq(TRIG_PIN, ECHO_ESQ);
+HCSR04 sensorDir(TRIG_PIN, ECHO_DIR);
 
-int velocidadeAtualEsq = 0;
-int velocidadeAtualDir = 0;
-int velocidadeAlvo = 0;
-unsigned long lastRampa = 0;
+unsigned long lastSensorRead = 0;
+bool obstaculoDetectado = false;
 
-void setupMotors() {
-  pinMode(MOTOR_ESQ_DIR, OUTPUT);
-  pinMode(MOTOR_DIR_DIR, OUTPUT);
-  pinMode(PWM_ESQ, OUTPUT);
-  pinMode(PWM_DIR, OUTPUT);
-}
+void setupSensors() {
+  // Configura os pinos dos sensores como entrada
+  pinMode(echo_esq, INPUT);
+  pinMode(echo_dir, INPUT);
+  pinMode(trig, OUTPUT);
+  pinMode(ledSonarEsquerdo, OUTPUT);
+  pinMode(ledSonarDireito, OUTPUT);
 
-// Função para definir o desejo (comando), sem travar o código
-void setMovimento(Direcao novaDirecao) {
-  estadoAtual = novaDirecao;
-  
-  if (estadoAtual == PARADO) {
-    velocidadeAlvo = 0;
-  } else {
-    velocidadeAlvo = VELOCIDADE_MAX;
-    
-    // Configura os pinos de direção IMEDIATAMENTE
-    // 0 = Frente, 1 = Trás (Ajuste conforme seu driver)
-    bool sentido = (estadoAtual == TRAS) ? HIGH : LOW; 
-    
-    // Lógica simples para curvas (pode refinar depois)
-    if (estadoAtual == FRENTE || estadoAtual == TRAS) {
-       digitalWrite(MOTOR_ESQ_DIR, sentido);
-       digitalWrite(MOTOR_DIR_DIR, sentido);
-    } 
-    else if (estadoAtual == ESQUERDA) {
-       digitalWrite(MOTOR_ESQ_DIR, HIGH); // Um motor vai pra tras
-       digitalWrite(MOTOR_DIR_DIR, LOW);  // Outro pra frente
-    }
-    else if (estadoAtual == DIREITA) {
-       digitalWrite(MOTOR_ESQ_DIR, LOW);
-       digitalWrite(MOTOR_DIR_DIR, HIGH);
-    }
+  // Estados inicial
+  digitalWrite(ledSonarEsquerdo, LOW);
+  digitalWrite(ledSonarDireito, LOW);
+  stop();
+
+  for (int i = 0; i < 5; i++) {
+    pinMode(sensorPins[i], INPUT);
   }
 }
 
-// Função chamada dentro do LOOP principal para suavizar a velocidade
-void loopMotors() {
-  if (millis() - lastRampa > RAMPA_DELAY) {
-    lastRampa = millis();
+// Retorna TRUE se precisar parar
+bool checkSafety() {
+  // Lê apenas a cada 50ms para não sobrecarregar
+  if (millis() - lastSensorRead > 50) {
+    lastSensorRead = millis();
     
-    // Rampa de Aceleração/Desaceleração
-    if (velocidadeAtualEsq < velocidadeAlvo) velocidadeAtualEsq += RAMPA_PASSO;
-    if (velocidadeAtualEsq > velocidadeAlvo) velocidadeAtualEsq -= RAMPA_PASSO;
+    float d1 = sensorEsq.dist();
+    float d2 = sensorDir.dist();
     
-    // Limites
-    velocidadeAtualEsq = constrain(velocidadeAtualEsq, 0, 255);
-    velocidadeAtualDir = velocidadeAtualEsq; // Por enquanto, iguais
-
-    // Aplica o PWM
-    analogWrite(PWM_ESQ, velocidadeAtualEsq);
-    analogWrite(PWM_DIR, velocidadeAtualDir);
+    // Filtro simples: ignora leituras 0 (erros) e valida distância segura
+    bool perigoEsq = (d1 > 0 && d1 < DISTANCIA_SEGURA);
+    bool perigoDir = (d2 > 0 && d2 < DISTANCIA_SEGURA);
+    
+    if (perigoEsq || perigoDir) {
+      obstaculoDetectado = true;
+      return true; // PERIGO!
+    } else {
+      obstaculoDetectado = false;
+      return false; // Seguro
+    }
   }
-}
-
-void pararImediatamente() {
-  estadoAtual = PARADO;
-  velocidadeAlvo = 0;
-  velocidadeAtualEsq = 0;
-  velocidadeAtualDir = 0;
-  analogWrite(PWM_ESQ, 0);
-  analogWrite(PWM_DIR, 0);
+  return obstaculoDetectado; // Retorna o último estado conhecido
 }
 
 #endif

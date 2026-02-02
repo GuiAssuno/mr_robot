@@ -1,12 +1,4 @@
-#ifndef WEBPAGE_H
-#define WEBPAGE_H
 
-#include <WebServer.h>
-#include "Config.h"
-
-WebServer server(80);
-
-const char* html_page = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -429,7 +421,7 @@ const char* html_page = R"rawliteral(
         
         <!-- Desktop Layout -->
         <div class="video-desktop">
-            <img id="cameraStreamDesktop" class="cameraStream" src='http://%CAM_IP%:81/stream' alt="Stream da câmera" style="display: none;">
+            <img id="cameraStreamDesktop" class="cameraStream" src='http://192.168.4.100:81/stream' alt="Stream da câmera" style="display: none;">
             <div id="videoStatusDesktop" class="video-status">Câmera...</div>
         </div>
         
@@ -515,6 +507,55 @@ const char* html_page = R"rawliteral(
     <div class="debug-info" id="debugInfo" style="display: none;"></div>
 
     <script>
+
+        // Variável da conexão
+        var connection;
+
+        // Inicia a conexão assim que a página carrega
+        function startWebSocket() {
+          // Conecta no IP do Robô, porta 81
+          connection = new WebSocket('ws://' + location.hostname + ':81/');
+          
+          connection.onopen = function () {
+            console.log('WebSocket Conectado!');
+          };
+          
+          connection.onerror = function (error) {
+            console.log('WebSocket Error ', error);
+          };
+
+          // Se cair a conexão, tenta reconectar
+          connection.onclose = function () {
+            console.log('WebSocket Fechado. Reconectando...');
+            setTimeout(startWebSocket, 2000);
+          };
+        }
+
+        // Função nova de envio (Muito mais rápida)
+        function cmd(c) {
+          // Só envia se estiver conectado
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.send(c); 
+          }
+        }
+
+        // Inicia tudo
+        startWebSocket();
+
+        // Detectar Teclado (PC) - Continua igual, mas chama a nova função cmd()
+        document.addEventListener('keydown', function(e) {
+          if(e.repeat) return;
+          if(e.key === "ArrowUp") cmd('F');
+          if(e.key === "ArrowDown") cmd('B');
+          if(e.key === "ArrowLeft") cmd('L');
+          if(e.key === "ArrowRight") cmd('R');
+          if(e.key === " ") cmd('S'); 
+        });
+
+        document.addEventListener('keyup', function(e) {
+          cmd('S'); 
+        });
+
         // ===== VARIÁVEIS GLOBAIS =====
         let currentMode = true;
         let isConnected = false;
@@ -604,7 +645,7 @@ const char* html_page = R"rawliteral(
         }
         
         function sendCommand(cmd) {
-            xQueueSend(filaComandos, &cmd, 0);
+            commandQueue.push(cmd);
             processCommandQueue();
         }
         
@@ -1173,24 +1214,3 @@ const char* html_page = R"rawliteral(
     </script>
 </body>
 </html>
-)rawliteral";
-
-void setupWebServer() {
-  server.on("/", []() {
-    server.send(200, "text/html", html);
-  });
-
-  server.on("/cmd", []() {
-    if (server.hasArg("c")) {
-      String c = server.arg("c");
-      // AQUI É A MÁGICA: O Núcleo 1 apenas atualiza a variável.
-      // Quem executa é o Núcleo 0.
-      comandoWeb = c.charAt(0); 
-      server.send(200, "text/plain", "OK");
-    }
-  });
-
-  server.begin();
-}
-
-#endif

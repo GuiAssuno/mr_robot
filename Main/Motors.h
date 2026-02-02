@@ -13,10 +13,10 @@ int velocidadeAlvo = 0;
 unsigned long lastRampa = 0;
 
 void setupMotors() {
-  pinMode(MOTOR_ESQ_DIR, OUTPUT);
-  pinMode(MOTOR_DIR_DIR, OUTPUT);
-  pinMode(PWM_ESQ, OUTPUT);
-  pinMode(PWM_DIR, OUTPUT);
+  pinMode(motor_esquerdo, OUTPUT);
+  pinMode(motor_direito, OUTPUT);
+  pinMode(pwm_esquerdo, OUTPUT);
+  pinMode(pwm_direito, OUTPUT);
 }
 
 // Função para definir o desejo (comando), sem travar o código
