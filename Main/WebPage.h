@@ -4,7 +4,7 @@
 #include <WebServer.h>
 #include "Config.h"
 
-WebServer server(80);
+extern WebServer server;
 
 const char* html_page = R"rawliteral(
 <!DOCTYPE html>
@@ -579,30 +579,6 @@ const char* html_page = R"rawliteral(
         };
         
         // ===== SISTEMA DE ENVIO DE COMANDOS =====
-        function processCommandQueue() {
-            if (commandQueue.length > 0 && !isSending) {
-                isSending = true;
-                const commandToSend = commandQueue.shift();
-                
-                fetch('/command?cmd=' + commandToSend)
-                    .then(response => response.text())
-                    .then(data => {
-                        console.log(`Comando enviado: ${commandToSend} - Resposta: ${data}`);
-                        updateConnectionStatus(data);
-                    })
-                    .catch(error => {
-                        console.error(`Erro ao enviar comando ${commandToSend}:`, error);
-                        updateConnectionStatus('ERROR');
-                    })
-                    .finally(() => {
-                        setTimeout(() => {
-                            isSending = false;
-                            processCommandQueue();
-                        }, sendDelay);
-                    });
-            }
-        }
-        
         function sendCommand(cmd) {
             xQueueSend(filaComandos, &cmd, 0);
             processCommandQueue();
@@ -1138,6 +1114,11 @@ const char* html_page = R"rawliteral(
         }
 
         // ===== INICIALIZAÇÃO =====
+        var cameraHost = location.hostname; // Pega o IP que está na barra de endereço
+        
+        document.getElementById('stream').src = 'http://' + cameraHost + ':81/stream';
+        
+        
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Inicializando controles...');
             
@@ -1175,22 +1156,6 @@ const char* html_page = R"rawliteral(
 </html>
 )rawliteral";
 
-void setupWebServer() {
-  server.on("/", []() {
-    server.send(200, "text/html", html);
-  });
 
-  server.on("/cmd", []() {
-    if (server.hasArg("c")) {
-      String c = server.arg("c");
-      // AQUI É A MÁGICA: O Núcleo 1 apenas atualiza a variável.
-      // Quem executa é o Núcleo 0.
-      comandoWeb = c.charAt(0); 
-      server.send(200, "text/plain", "OK");
-    }
-  });
-
-  server.begin();
-}
 
 #endif

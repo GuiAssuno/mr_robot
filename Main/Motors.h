@@ -3,77 +3,95 @@
 
 #include "Config.h"
 
-// Estados de movimento
-enum Direcao { PARADO, FRENTE, TRAS, ESQUERDA, DIREITA };
-Direcao estadoAtual = PARADO;
-
+// Variáveis de controle de velocidade
 int velocidadeAtualEsq = 0;
 int velocidadeAtualDir = 0;
 int velocidadeAlvo = 0;
-unsigned long lastRampa = 0;
+unsigned long ultima_aceleracao = 0;
 
-void setupMotors() {
+void setupMotor() { // Nome no plural
   pinMode(motor_esquerdo, OUTPUT);
   pinMode(motor_direito, OUTPUT);
   pinMode(pwm_esquerdo, OUTPUT);
   pinMode(pwm_direito, OUTPUT);
 }
 
-// Função para definir o desejo (comando), sem travar o código
-void setMovimento(Direcao novaDirecao) {
-  estadoAtual = novaDirecao;
-  
-  if (estadoAtual == PARADO) {
-    velocidadeAlvo = 0;
-  } else {
-    velocidadeAlvo = VELOCIDADE_MAX;
-    
-    // Configura os pinos de direção IMEDIATAMENTE
-    // 0 = Frente, 1 = Trás (Ajuste conforme seu driver)
-    bool sentido = (estadoAtual == TRAS) ? HIGH : LOW; 
-    
-    // Lógica simples para curvas (pode refinar depois)
-    if (estadoAtual == FRENTE || estadoAtual == TRAS) {
-       digitalWrite(MOTOR_ESQ_DIR, sentido);
-       digitalWrite(MOTOR_DIR_DIR, sentido);
-    } 
-    else if (estadoAtual == ESQUERDA) {
-       digitalWrite(MOTOR_ESQ_DIR, HIGH); // Um motor vai pra tras
-       digitalWrite(MOTOR_DIR_DIR, LOW);  // Outro pra frente
-    }
-    else if (estadoAtual == DIREITA) {
-       digitalWrite(MOTOR_ESQ_DIR, LOW);
-       digitalWrite(MOTOR_DIR_DIR, HIGH);
-    }
-  }
+// === FUNÇÕES DE MOVIMENTO ===
+
+void Frente() {
+  digitalWrite(motor_esquerdo, LOW); // Ajuste LOW/HIGH conforme seu driver
+  digitalWrite(motor_direito, LOW);
+  velocidadeAlvo = VELOCIDADE_MAX;
 }
 
-// Função chamada dentro do LOOP principal para suavizar a velocidade
-void loopMotors() {
-  if (millis() - lastRampa > RAMPA_DELAY) {
-    lastRampa = millis();
-    
-    // Rampa de Aceleração/Desaceleração
-    if (velocidadeAtualEsq < velocidadeAlvo) velocidadeAtualEsq += RAMPA_PASSO;
-    if (velocidadeAtualEsq > velocidadeAlvo) velocidadeAtualEsq -= RAMPA_PASSO;
-    
-    // Limites
-    velocidadeAtualEsq = constrain(velocidadeAtualEsq, 0, 255);
-    velocidadeAtualDir = velocidadeAtualEsq; // Por enquanto, iguais
-
-    // Aplica o PWM
-    analogWrite(PWM_ESQ, velocidadeAtualEsq);
-    analogWrite(PWM_DIR, velocidadeAtualDir);
-  }
+void Back() {
+  digitalWrite(motor_esquerdo, HIGH);
+  digitalWrite(motor_direito, HIGH);
+  velocidadeAlvo = VELOCIDADE_MAX;
 }
 
-void pararImediatamente() {
-  estadoAtual = PARADO;
+void Parar() {
   velocidadeAlvo = 0;
+
+}
+
+void Stop(){
   velocidadeAtualEsq = 0;
   velocidadeAtualDir = 0;
-  analogWrite(PWM_ESQ, 0);
-  analogWrite(PWM_DIR, 0);
+}
+
+void Gira(bool esquerda) {
+  velocidadeAlvo = VELOCIDADE_MAX; 
+
+  if (modoGiro360) {
+    // === MODO Giro no Eixo ===
+    if (esquerda) {
+      digitalWrite(motor_esquerdo, HIGH); // Trás
+      digitalWrite(motor_direito, LOW);   // Frente
+    } else {
+      digitalWrite(motor_esquerdo, LOW);  // Frente
+      digitalWrite(motor_direito, HIGH);  // Trás
+    }
+  } 
+  else {
+    // === MODO CURVA ===
+    // força o PWM para pular a aceleração de um dos lados
+    if (esquerda) {
+      digitalWrite(motor_esquerdo, LOW); 
+      digitalWrite(motor_direito, LOW);
+      
+      analogWrite(pwm_esquerdo, 0);
+      analogWrite(pwm_direito, velocidadeAlvo); 
+
+    } else {
+      digitalWrite(motor_esquerdo, LOW);
+      digitalWrite(motor_direito, LOW);
+      
+      analogWrite(pwm_esquerdo, velocidadeAlvo);
+      analogWrite(pwm_direito, 0);
+    }
+    return; // Retorna para o loopMotors não sobrescrever imediatamente
+  }
+}
+
+// === O LOOP DA MOVIMENTAÇÃO ===
+// Isso roda no loop do HardwareCore
+void loopMotors() {
+  if (millis() - ultima_aceleracao > TEMPO_ACELERACAO) {
+    ultima_aceleracao = millis();
+    
+    // Aceleração Suave
+    if (velocidadeAtualEsq < velocidadeAlvo) velocidadeAtualEsq += ACELERACAO;
+    if (velocidadeAtualEsq > velocidadeAlvo) velocidadeAtualEsq -= ACELERACAO;
+    
+    // Trava limites
+    velocidadeAtualEsq = constrain(velocidadeAtualEsq, 0, VELOCIDADE_MAX);
+    velocidadeAtualDir = velocidadeAtualEsq; // Sincroniza lados (para Frente/Tras/360)
+
+    // Aplica aos motores
+    analogWrite(pwm_esquerdo, velocidadeAtualEsq);
+    analogWrite(pwm_direito, velocidadeAtualDir);
+  }
 }
 
 #endif

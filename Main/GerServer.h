@@ -1,181 +1,101 @@
-#ifndef GerSERVER_H
-#define GerSERVER_H
+#ifndef GERSERVER_H
+#define GERSERVER_H
 
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
+#include <ESPmDNS.h>
 #include "Config.h"
-#include "WebPage.h"      // Precisa incluir para acessar a variável 'server' e 'html_page'
-#include "HardwareCore.h" // Para enviar comandos para a fila (xQueue)
+#include "WebPage.h"      
+#include "HardwareCore.h" 
 
 // Instância do WebSocket (porta 81)
 WebSocketsServer webSocket = WebSocketsServer(81);
+extern WebServer server;
 
 // ==========================================
-// FUNÇÃO DE EVENTO DO WEBSOCKET
+// 1. EVENTO DO WEBSOCKET (Ouve o Cliente)
 // ==========================================
 void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   if (type == WStype_TEXT) {
-    char cmd = (char)payload[0];
-    
-    // Envia para a Fila do FreeRTOS (Para o Núcleo 0 processar)
-    // Se você ainda não implementou a fila, use a variável global aqui
-    xQueueSend(filaComandos, &cmd, 0); 
+    char* texto = (char*) payload;
+
+    // --- LÓGICA DO JOYSTICK ---
+    // O Javascript manda: "J:0:0", "J:100:-50", etc.
+    if (payload[0] == 'J') {
+      int x, y;
+      // Extrai os números do texto
+      if (sscanf(texto, "J:%d:%d", &x, &y) == 2) {
+        // Apenas ATUALIZA as variáveis globais (Config.h)
+        // O HardwareCore (Núcleo 0) é quem vai ler isso e mover os motores
+        joyX = x;
+        joyY = y;
+        
+        // Avisa o HardwareCore que estamos no modo Joystick
+        char cmd = 'J'; 
+        xQueueSend(filaComandos, &cmd, 0); 
+      }
+    } 
+    // --- LÓGICA DE BOTÕES (F, B, L, R, S, A, X) ---
+    else {
+      char cmd = (char)payload[0];
+      xQueueSend(filaComandos, &cmd, 0);
+    }
   }
 }
 
 // ==========================================
-// FUNÇÃO PRINCIPAL DE CONFIGURAÇÃO (SETUP)
+// 2. SETUP DA REDE E SERVIDORES
 // ==========================================
-void setupNetworkAndServer() {
-  
-  // 1. Configurar Wi-Fi (Station Mode - Conecta no Celular/Note)
+// (Renomeado para bater com o Main.ino)
+void setupRede() {
+
+  // 1. Conexão Wi-Fi
   WiFi.mode(WIFI_STA);
-  // Se quiser IP Fixo, configure aqui antes do begin
-  // WiFi.config(local_IP, gateway, subnet); 
   WiFi.begin(ssid, password);
 
-  Serial.print("Conectando ao Hostpot...");
+  Serial.print("Conectando ao Hotspot...");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.println("\nConectado! IP: " + WiFi.localIP().toString());
 
-  // 2. Configurar Rotas do Servidor Web
-  server.on("/", []() {
-    // Aqui usamos o HTML que está em WebPage.h
-    // Dica: Se quiser injetar o IP da câmera dinamicamente:
-    String pagina = html_page;
-    // pagina.replace("SEU_IP_CAMERA", WiFi.localIP().toString()); 
-    server.send(200, "text/html", pagina);
-  });
-
-  server.on("/command", []() {
-    if (server.hasArg("cmd")) {
-      String c = server.arg("cmd");
-      char cmd = c.charAt(0);
-      xQueueSend(filaComandos, &cmd, 0); // Envia para fila
-      server.send(200, "text/plain", "OK");
-    }
-  });
-
-  // 3. Iniciar Serviços
-  server.begin();
-  
-  webSocket.begin();
-  webSocket.onEvent(onWebSocketEvent);
-  
-  Serial.println("Servidor HTTP e WebSocket iniciados!");
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // ==============================
-  //  CONFIGURAÇÃO DO ACCESS POINT
-  // ==============================
-  WiFi.mode(WIFI_OFF);
-  delay(1000);
-
-  WiFi.mode(WIFI_AP);
-  delay(500);
-
-  WiFi.softAPConfig(
-    IPAddress(192, 168, 4, 1),   // IP Local
-    IPAddress(192, 168, 4, 1),   // Gateway
-    IPAddress(255, 255, 255, 0)  // Subnet
-  );
-
-  bool apResult = WiFi.softAP(ssid, password);
-
-  // para feedback via monitor serial
-  if (apResult) {
-    Serial.println("✓ Access Point criado com sucesso!");
-    Serial.print("SSID: ");
-    Serial.println(ssid);
-    Serial.print("Senha: ");
-    Serial.println(password);
-    Serial.print("IP do AP: ");
-    Serial.println(WiFi.softAPIP());
-    Serial.print("MAC do AP: ");
-    Serial.println(WiFi.softAPmacAddress());
-  } else {
-    Serial.println("✗ Falha ao criar Access Point!");
-    return;
+  // 2. Configura mDNS (http://superrobo.local)
+  if (MDNS.begin("superrobo")) {
+    Serial.println("MDNS iniciado! Acesse: http://superrobo.local");
   }
 
-  // ==========================
-  //  CONFIGURAÇÃO DO SERVIDOR
-  // ==========================
-  Serial.println("Configurando servidor web...");
-
-  //interface de controle
+  // 3. Rota da Página Principal
   server.on("/", []() {
-    server.send(200, "text/html", getHTML());
+    server.send(200, "text/html", html_page);
   });
 
-  //comandos recebidos via rota http
-  server.on("/command", HTTP_GET, []() {
-    if (server.hasArg("cmd")) {
-      char command = mapCommand(server.arg("cmd"));
-
-      if ((flag) && (command != 'X')) return;
-
-      if (command != '\0') {
-        comando(command);
-        Serial.println(command);
-        server.send(200, "text/plain", "OK");
-      } else {
-        server.send(400, "application/json", "{\"status\":\"invalid_command\"}");
-      }
+  // 4. Rota para comandos HTTP (Backup se WebSocket falhar)
+  server.on("/command", []() {
+    if (server.hasArg("cmd")) { // Usa "cmd" conforme seu Javascript novo
+      String c = server.arg("cmd");
+      char cmd = c.charAt(0); // Pega a primeira letra
+      
+      xQueueSend(filaComandos, &cmd, 0); // Envia para o Núcleo 0
+      server.send(200, "text/plain", "OK");
     } else {
-      server.send(400, "application/json", "{\"status\":\"no_command\"}");
+      server.send(400, "text/plain", "Erro");
     }
   });
 
-  // === Rota para joystick ===
-  server.on("/joystick", HTTP_GET, handleJoystick);
-
-  // Iniciar servidor
+  // 5. Inicia Serviços
   server.begin();
-  Serial.println("✓ Servidor web iniciado na porta 80");
-  Serial.println("=========================");
-  Serial.println("ESP32 WROOM PRONTO!");
-  Serial.println("Access Point: " + String(ssid));
-  Serial.println("IP: " + WiFi.softAPIP().toString());
-  Serial.println("Interface: http://" + WiFi.softAPIP().toString());
-  Serial.println("=========================");
-    filaComandos = xQueueCreate(10, sizeof(char));
-    // Configurações do WebSocket
   webSocket.begin();
   webSocket.onEvent(onWebSocketEvent);
-    setupWebServer();
-
+  
+  Serial.println("Servidor HTTP e WebSocket iniciados.");
 }
 
-// Função para manter os serviços vivos (Chamar no Loop do Main.ino)
-void loopNetwork() {
+// ==========================================
+// 3. LOOP DA REDE (Mantém tudo vivo)
+// ==========================================
+void loopRede() {
   server.handleClient();
   webSocket.loop();
 }

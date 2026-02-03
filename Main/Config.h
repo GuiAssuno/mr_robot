@@ -3,89 +3,56 @@
 
 #include <Arduino.h>
 #include "freertos/queue.h"
-// Handle da fila
-extern QueueHandle_t filaComandos;
 
-// ================= REDE (HOTSPOT DO NOTEBOOK) =================
-const char* ssid = "mr robot";     // Nome do host
-const char* password = "robot1234";     // Senha
-
-// IP Fixo para o Robô (Controle)
-IPAddress local_IP(192, 168, 15, 20);   // Ajuste conforme seu Hotspot (50.x para Linux, 137.x para Windows)
-IPAddress gateway(192, 168, 50, 1);
-IPAddress subnet(255, 255, 255, 0);
-
-// ================== VARIÁVEIS COMPARTILHADAS ==================
-// 'volatile' avisa ao compilador que essa variável pode mudar 
-// a qualquer momento por outro núcleo.
-volatile char comandoWeb = 'S'; // 'F', 'B', 'L', 'R', 'S'
-volatile int velocidadeAtual = 0;
-volatile bool obstaculoDetectado = false;
+// ================= REDE =================
+const char* ssid = "mr robot";     
+const char* password = "robot1234";     
 
 // ================= PINAGEM =================
+// Motores
 #define motor_esquerdo 16
 #define motor_direito 17
 #define pwm_esquerdo 18
 #define pwm_direito 19
 
-// Sensores
+// Sensores HCSR04
 #define trig 27
 #define echo_esq 34
 #define echo_dir 35
 
-// Led
+// LEDs
 #define ledSonarEsquerdo 4
 #define ledSonarDireito 25
 
-// Sensor faixa
+// Constantes de ajuste
+const int VELOCIDADE_MAX = 204;
+const int ACELERACAO = 12;        // O quanto aumenta a velocidade 
+const int TEMPO_ACELERACAO = 15; // Tempo entre uma aceleração e outra
+const int DISTANCIA_SEGURA = 12;
+// =========== VARIÁVEIS VOLATILE =================
+// volatile é obrigatório para variáveis usadas por núcleos diferentes
 
+// Comandos
+volatile char comandoWeb = 'S'; 
+volatile int velocidadeAtual = 0; 
+volatile bool obstaculoDetectado = false;
 
+// Joystick
+volatile int joyX = 0;
+volatile int joyY = 0;
 
-// Declaração de funções
-void Back();
-void stop();
-void Parar();
-void Frente();
-void Direita();
-int autosafe();
-void Esquerda();
-String getHTML();
-void Gira(bool lado);
-void comando(char inst);
-char mapCommand(String cmd);
+// Flags de modo
+// true = Para e trava, false = Espera 1s e libera
+volatile bool modoSegurancaTotal = true; 
 
-// Declarando as variaveis
-HCSR04 distancia_esquerda(trig, echo_esq),  //variaveis de leitura do modulo HC-SR04
-  distancia_direita(trig, echo_dir);        // trigger disparado juntos pelo mesmo pino
+// true = Giro, false = Curva
+volatile bool modoGiro360 = false; 
 
-float M_distancia[7][2];
-void (*fucao)();
+// Auxiliar para contar tempo
+volatile unsigned long tempoObstaculoDetectado = 0;
 
-enum { FRENTE = 0,
-       BACK = 1,
-       PARAR = 2 };
-
-unsigned long espera = 0,
-              Millis = 0;
-
-int x = 0,
-    y = 0,
-    pwm = 0,
-    velo_atual = 0;
-
-bool modo = true,
-     curva = false,
-     parado = true,
-     press_l = false,
-     press_r = false,
-     liberado = false,
-     flag = false,
-     direction = false;
-
-const int safe = 12,
-          marcha = 50,
-          base_vira = 15,
-          delay_millis = 100,
-          velo_limite = 200;
+// =========== OBJETOS EXTERNOS =================
+// É apenas para mostrar que esses objetos existem em outros arquivos
+extern QueueHandle_t filaComandos; 
 
 #endif

@@ -508,39 +508,21 @@
 
     <script>
 
-        // Variável da conexão
-        var connection;
-
-        // Inicia a conexão assim que a página carrega
-        function startWebSocket() {
-          // Conecta no IP do Robô, porta 81
-          connection = new WebSocket('ws://' + location.hostname + ':81/');
-          
-          connection.onopen = function () {
-            console.log('WebSocket Conectado!');
-          };
-          
-          connection.onerror = function (error) {
-            console.log('WebSocket Error ', error);
-          };
-
-          // Se cair a conexão, tenta reconectar
-          connection.onclose = function () {
-            console.log('WebSocket Fechado. Reconectando...');
-            setTimeout(startWebSocket, 2000);
-          };
-        }
-
-        // Função nova de envio (Muito mais rápida)
-        function cmd(c) {
-          // Só envia se estiver conectado
-          if (connection.readyState === WebSocket.OPEN) {
-            connection.send(c); 
+        function sendJoystick(x, y) {
+          var now = Date.now();
+          // Só envia se passou 50ms desde o último envio (evita flood)
+          if (now - lastSend > 50) {
+            if (connection.readyState === WebSocket.OPEN) {
+              // Formato: "J:valorX:valorY"
+              // Exemplo: "J:0:100" (Frente total)
+              connection.send("J:" + Math.round(x) + ":" + Math.round(y));
+              lastSend = now;
+            }
           }
         }
 
-        // Inicia tudo
-        startWebSocket();
+        // ... No seu código do Joystick virtual (nipple.js ou canvas) ...
+        // Quando o joystick mover, chame: sendJoystick(data.x, data.y);
 
         // Detectar Teclado (PC) - Continua igual, mas chama a nova função cmd()
         document.addEventListener('keydown', function(e) {
@@ -594,6 +576,12 @@
         // Estado de controle de teclado
         const pressedKeys = new Set();
 
+        // Variável da conexão
+        var connection;
+
+        // Variável para controlar o tempo de envio (Throttle)
+        var lastSend = 0;
+
         const buttonElements = {
             mode: ['btnMode', 'btnModePortrait', 'btnModeLandscape'],
             stop: ['btnStop', 'btnStopPortrait', 'btnStopLandscape'],
@@ -620,35 +608,52 @@
         };
         
         // ===== SISTEMA DE ENVIO DE COMANDOS =====
-        function processCommandQueue() {
-            if (commandQueue.length > 0 && !isSending) {
-                isSending = true;
-                const commandToSend = commandQueue.shift();
-                
-                fetch('/command?cmd=' + commandToSend)
-                    .then(response => response.text())
-                    .then(data => {
-                        console.log(`Comando enviado: ${commandToSend} - Resposta: ${data}`);
-                        updateConnectionStatus(data);
-                    })
-                    .catch(error => {
-                        console.error(`Erro ao enviar comando ${commandToSend}:`, error);
-                        updateConnectionStatus('ERROR');
-                    })
-                    .finally(() => {
-                        setTimeout(() => {
-                            isSending = false;
-                            processCommandQueue();
-                        }, sendDelay);
-                    });
+        
+        // Inicia a conexão assim que a página carrega
+        function startWebSocket() {
+          // Conecta no IP do Robô, porta 81
+          connection = new WebSocket('ws://' + location.hostname + ':81/');
+          
+          connection.onopen = function () {
+            console.log('WebSocket Conectado!');
+          };
+          
+          connection.onerror = function (error) {
+            console.log('WebSocket Error ', error);
+          };
+
+          // Se cair a conexão, tenta reconectar
+          connection.onclose = function () {
+            console.log('WebSocket Fechado. Reconectando...');
+            setTimeout(startWebSocket, 2000);
+          };
+        }
+
+        // Função nova de envio (Muito mais rápida)
+        function cmd(c) {
+          // Só envia se estiver conectado
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.send(c); 
+          }
+        }
+
+        // Inicia tudo
+        startWebSocket();
+
+        
+        function sendJoystick(x, y) {
+          var now = Date.now();
+          // Só envia se passou 50ms desde o último envio (evita flood)
+          if (now - lastSend > 50) {
+            if (connection.readyState === WebSocket.OPEN) {
+              // Formato: "J:valorX:valorY"
+              // Exemplo: "J:0:100" (Frente total)
+              connection.send("J:" + Math.round(x) + ":" + Math.round(y));
+              lastSend = now;
             }
+          }
         }
-        
-        function sendCommand(cmd) {
-            commandQueue.push(cmd);
-            processCommandQueue();
-        }
-        
+
         // ===== CONTROLES DE TECLADO =====
         function handleKeyDown(e) {
             if (e.repeat) return;
