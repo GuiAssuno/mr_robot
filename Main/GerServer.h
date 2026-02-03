@@ -20,8 +20,7 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
   if (type == WStype_TEXT) {
     char* texto = (char*) payload;
 
-    // --- LÓGICA DO JOYSTICK ---
-    // O Javascript manda: "J:0:0", "J:100:-50", etc.
+    // --- JOYSTICK ---
     if (payload[0] == 'J') {
       int x, y;
       // Extrai os números do texto
@@ -33,10 +32,28 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
         
         // Avisa o HardwareCore que estamos no modo Joystick
         char cmd = 'J'; 
-        xQueueSend(filaComandos, &cmd, 0); 
+        xQueueSend(filaComandos, &cmd, 0);
+         
       }
-    } 
-    // --- LÓGICA DE BOTÕES (F, B, L, R, S, A, X) ---
+    }
+
+    //--- VELOCIDADE ---
+    else if (payload[0] == 'V') {
+        int pct;
+        // Lê o valor percentual (ex: "V:80" -> pct = 80)
+        if (sscanf(texto, "V:%d", &pct) == 1) {
+          // Trava entre 0 e 100 por segurança
+          pct = constrain(pct, 0, 100);
+          
+          // Converte Porcentagem (0-100) para PWM Real (0-255)
+          // e atualiza a variável global que o motor usa.
+          limitePwmGlobal = map(pct, 0, 100, 0, 255);
+          
+          Serial.printf("Novo limite de velocidade: %d%% (PWM: %d)\n", pct, limitePwmGlobal);
+        }
+      }  
+
+    // --- BOTÕES ---
     else {
       char cmd = (char)payload[0];
       xQueueSend(filaComandos, &cmd, 0);

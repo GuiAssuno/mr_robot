@@ -25,7 +25,6 @@ const char* password = "robot1234";
 #define ledSonarDireito 25
 
 // Constantes de ajuste
-const int VELOCIDADE_MAX = 204;
 const int ACELERACAO = 12;        // O quanto aumenta a velocidade 
 const int TEMPO_ACELERACAO = 15; // Tempo entre uma aceleração e outra
 const int DISTANCIA_SEGURA = 12;
@@ -42,7 +41,7 @@ volatile int joyX = 0;
 volatile int joyY = 0;
 
 // Flags de modo
-// true = Para e trava, false = Espera 1s e libera
+// true = Para e trava, false = Espera 1seg e libera
 volatile bool modoSegurancaTotal = true; 
 
 // true = Giro, false = Curva
@@ -51,6 +50,8 @@ volatile bool modoGiro360 = false;
 // Auxiliar para contar tempo
 volatile unsigned long tempoObstaculoDetectado = 0;
 
+// O usuario escolhe a velocidade maxima
+volatile int limitePwmGlobal = 255;
 // =========== OBJETOS EXTERNOS =================
 // É apenas para mostrar que esses objetos existem em outros arquivos
 extern QueueHandle_t filaComandos; 
