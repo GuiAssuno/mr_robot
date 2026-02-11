@@ -2,29 +2,58 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "freertos/queue.h"
 
-// ================= REDE (HOTSPOT DO NOTEBOOK) =================
-const char* ssid = "ControlCenter";     // Nome do Hotspot do Linux/Windows
-const char* password = "robot1234";     // Senha
-// IP Fixo para o Robô (Controle)
-IPAddress local_IP(192, 168, 50, 20);   // Ajuste conforme seu Hotspot (50.x para Linux, 137.x para Windows)
-IPAddress gateway(192, 168, 50, 1);
-IPAddress subnet(255, 255, 255, 0);
+// ================= REDE =================
+const char* ssid = "mr robot";     
+const char* password = "robot1234";     
 
 // ================= PINAGEM =================
-#define MOTOR_ESQ_DIR 16  // Direção
-#define MOTOR_DIR_DIR 17
-#define PWM_ESQ 18        // Velocidade
-#define PWM_DIR 19
+// Motores
+#define motor_esquerdo 16
+#define motor_direito 17
+#define pwm_esquerdo 18
+#define pwm_direito 19
 
-#define TRIG_PIN 27
-#define ECHO_ESQ 34
-#define ECHO_DIR 35
+// Sensores HCSR04
+#define trig 27
+#define echo_esq 34
+#define echo_dir 35
 
-// ================= AJUSTES =================
-const int DISTANCIA_SEGURA = 20; // cm
-const int VELOCIDADE_MAX = 200;  // 0 a 255
-const int RAMPA_PASSO = 20;      // Quanto acelera por ciclo
-const int RAMPA_DELAY = 15;      // ms entre incrementos
+// LEDs
+#define ledSonarEsquerdo 4
+#define ledSonarDireito 25
+
+// Constantes de ajuste
+const int ACELERACAO = 12;        // O quanto aumenta a velocidade 
+const int TEMPO_ACELERACAO = 15; // Tempo entre uma aceleração e outra
+const int DISTANCIA_SEGURA = 12;
+// =========== VARIÁVEIS VOLATILE =================
+// volatile é obrigatório para variáveis usadas por núcleos diferentes
+
+// Comandos
+volatile char comandoWeb = 'S'; 
+volatile int velocidadeAtual = 0; 
+volatile bool obstaculoDetectado = false;
+
+// Joystick
+volatile int joyX = 0;
+volatile int joyY = 0;
+
+// Flags de modo
+// true = Para e trava, false = Espera 1seg e libera
+volatile bool modoSegurancaTotal = true; 
+
+// true = Giro, false = Curva
+volatile bool modoGiro360 = false; 
+
+// Auxiliar para contar tempo
+volatile unsigned long tempoObstaculoDetectado = 0;
+
+// O usuario escolhe a velocidade maxima
+volatile int limitePwmGlobal = 255;
+// =========== OBJETOS EXTERNOS =================
+// É apenas para mostrar que esses objetos existem em outros arquivos
+extern QueueHandle_t filaComandos; 
 
 #endif
