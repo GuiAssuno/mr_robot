@@ -44,7 +44,7 @@ volatile int joyY = 0;
 // ============= FLAGS VOLATILE ===============
 volatile bool modoSegurancaTotal = true; // true = trava | false = libera
 
-volatile bool modoGiro360 = false; // true = Giro | false = Curva
+volatile bool modoGiro = false; // true = Giro | false = Curva
 
 // Contar tempo auxiliar
 volatile unsigned long tempoObstaculoDetectado = 0;
