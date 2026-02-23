@@ -1,5 +1,5 @@
-#ifndef SENSORS_H
-#define SENSORS_H
+#ifndef SENSORES_H
+#define SENSORES_H
 
 #include "Config.h"
 #include <HCSR04.h> 
@@ -7,20 +7,22 @@
 HCSR04 sensorEsq(trig, echo_esq);
 HCSR04 sensorDir(trig, echo_dir);
 
-// [2] Linhas (0=Esq, 1=Dir)
+// [2] Linhas (0=Esq | 1=Dir)
 // [5] Colunas (5 leituras)
-float matrizHistorico[2][5]; 
+float matrix[2][5]; 
 
-int colunaAtual = 0; // Qual coluna estamos usando
-unsigned long ultimaLeitura = 0;
+int colunaAtual = 0; // Coluna que está usando
+unsigned long ultimaLeitura = 0; // Ultima leitura dos sensores
 
+// Configurando os sensores
 void setupSensores() {
-  // Sensor HCSR04
+  // Sensores HCSR04
   pinMode(echo_esq, INPUT); 
   pinMode(echo_dir, INPUT);
-  pinMode(trig, OUTPUT);
+  // os Dois triggers dos sensores estão na mesma pinagem
+  pinMode(trig, OUTPUT); 
 
-  // LEDs de aviso do sensor
+  // LEDs dos sensor
   pinMode(ledSonarEsquerdo, OUTPUT);
   pinMode(ledSonarDireito, OUTPUT);
 
@@ -29,20 +31,20 @@ void setupSensores() {
   digitalWrite(ledSonarEsquerdo, LOW);
   digitalWrite(ledSonarDireito, LOW);
 
-  // Preenche a matriz com valores apenas para começar 
+  // Preenche a matriz
   for(int c=0; c<5; c++) {
-      matrizHistorico[0][c] = DISTANCIA_SEGURA + 20; // Linha 0 (Esq)
-      matrizHistorico[1][c] = DISTANCIA_SEGURA + 20; // Linha 1 (Dir)
+      matrix[0][c] = DISTANCIA_SEGURA + 20; // Linha 0 (Esq)
+      matrix[1][c] = DISTANCIA_SEGURA + 20; // Linha 1 (Dir)
   }
 }
 
-// Função que calcula a média de uma LINHA da matriz
-float calcularMediaLinha(int linha) {
+// Função para média da matriz
+float calcularMedia(int linha) {
     float soma = 0;
     int validos = 0;
     for(int c = 0; c < 5; c++) {
-        float valor = matrizHistorico[linha][c];
-        if (valor > 0.1 && valor < 400) { // Filtra erros
+        float valor = matrix[linha][c];
+        if (valor > 0.1 && valor < 400) { // Filtro de erros
             soma += valor;
             validos++;
         }
@@ -51,27 +53,27 @@ float calcularMediaLinha(int linha) {
     return soma / validos;
 }
 
-bool checkSafety() {
+bool checkSafe() {
   if (millis() - ultimaLeitura > 50) {
     ultimaLeitura = millis();
     
-    // Le sensores
+    // Le os sensores
     float leituraEsq = sensorEsq.dist();
     float leituraDir = sensorDir.dist();
     
-    // Guarda na coluna atual da Matriz 
-    if (leituraEsq > 0) matrizHistorico[0][colunaAtual] = leituraEsq;
-    if (leituraDir > 0) matrizHistorico[1][colunaAtual] = leituraDir;
+    // Guarda na matriz coluna atual
+    if (leituraEsq > 0) matrix[0][colunaAtual] = leituraEsq;
+    if (leituraDir > 0) matrix[1][colunaAtual] = leituraDir;
     
-    // Avança a coluna atual para a próxima
+    // Avança para a próxima coluna
     colunaAtual++;
     if (colunaAtual >= 5) colunaAtual = 0; // Volta pro começo
     
-    // Calcula média usando a matriz
-    float mediaEsq = calcularMediaLinha(0); // Média da Linha 0
-    float mediaDir = calcularMediaLinha(1); // Média da Linha 1
+    // Calcula media da matriz
+    float mediaEsq = calcularMedia(0); // Linha 0
+    float mediaDir = calcularMedia(1); // Linha 1
     
-    // Check zona segura
+    // Verifica zona segura
     bool perigoEsq = (mediaEsq < DISTANCIA_SEGURA);
     bool perigoDir = (mediaDir < DISTANCIA_SEGURA);
     

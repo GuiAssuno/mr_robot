@@ -4,7 +4,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
-#include <DNSServer.h> // <--- Biblioteca Mágica do DNS
+#include <DNSServer.h> 
 #include "Config.h"
 #include "WebPage.h"      
 #include "HardwareCore.h" 
@@ -13,17 +13,16 @@
 WebSocketsServer webSocket = WebSocketsServer(81);
 extern WebServer server;
 
-// Instância do Servidor DNS (Para o truque do nome)
+// Instância do Servidor DNS
 DNSServer dnsServer;
 
-// ==========================================
-// 1. EVENTO DO WEBSOCKET
-// ==========================================
+
+// WEBSOCKET
 void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   if (type == WStype_TEXT) {
     char* texto = (char*) payload;
 
-    // --- LÓGICA DO JOYSTICK ---
+    // ============== JOYSTICK =============
     if (payload[0] == 'J') {
       int x, y;
       if (sscanf(texto, "J:%d:%d", &x, &y) == 2) {
@@ -33,7 +32,8 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
         xQueueSend(filaComandos, &cmd, 0);
       }
     } 
-    // --- LÓGICA DE VELOCIDADE (V) ---
+
+    // ============= VELOCIDADE =============
     else if (payload[0] == 'V') {
         int pct;
         if (sscanf(texto, "V:%d", &pct) == 1) {
@@ -42,7 +42,7 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
           Serial.printf("Novo limite: %d%%\n", pct);
         }
     }  
-    // --- LÓGICA DE BOTÕES ---
+    // ============== BOTÕES ==============
     else {
       char cmd = (char)payload[0];
       xQueueSend(filaComandos, &cmd, 0);
@@ -50,38 +50,34 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
   }
 }
 
-// ==========================================
-// 2. SETUP DA REDE (MODO ACCESS POINT)
-// ==========================================
+// ============ Setup da Rede ===========
 void setupRede() {
   // Configura como Ponto de Acesso (Cria o Wi-Fi)
   WiFi.mode(WIFI_AP);
   
-  // Nome da Rede e Senha (se quiser aberta, tire a senha)
-  // Ex: "Mr Robot" e senha "robot1234"
+  // Nome da rede e senha
   WiFi.softAP(ssid, password); 
 
   // Aguarda iniciar
   delay(100); 
   
-  Serial.println("Rede Wi-Fi Criada!");
-  Serial.print("Nome (SSID): "); Serial.println(ssid);
-  Serial.print("IP do Robo: "); Serial.println(WiFi.softAPIP()); // Geralmente 192.168.4.1
+  //Serial.println("Rede Wi-Fi Criada!");
+  //Serial.print("Nome (SSID): "); Serial.println(ssid);
+  //Serial.print("IP do Robo: "); Serial.println(WiFi.softAPIP()); // 192.168.4.1
 
-  // === O TRUQUE DO DNS ===
   dnsServer.start(53, "*", WiFi.softAPIP());
 
-  // 3. Rota da Página Principal
+  // Página Principal
   server.on("/", []() {
     server.send(200, "text/html", html_page);
   });
   
-  // Rota para Android detectar que é um portal (evita fechar sozinho)
+  // para o android detectar evitar fechar sozinho
   server.on("/generate_204", []() {
     server.send(200, "text/html", html_page);
   });
 
-  // Rota para iOS detectar portal
+  // para o ios detectar evitar fechar sozinho
   server.on("/hotspot-detect.html", []() {
     server.send(200, "text/html", html_page);
   });
@@ -102,18 +98,28 @@ void setupRede() {
   webSocket.begin();
   webSocket.onEvent(onWebSocketEvent);
   
-  Serial.println("Sistemas Iniciados. Conecte no Wi-Fi do robo e acesse 192.168.4.1 ou http://robo.com");
+  //Serial.println("acesse 192.168.4.1 ou http://robo.com");
 }
 
-// ==========================================
-// 3. LOOP DA REDE
-// ==========================================
+// 
+// ============ Loop da Rede ==============
+
 void loopRede() {
-  // Processa pedidos de DNS (Redireciona o nome para o IP)
+  // Redireciona o nome para o IP
   dnsServer.processNextRequest();
   
   server.handleClient();
   webSocket.loop();
+}
+
+// ========= Tarefa do Nucleo 0 (adicionar depois para ver desempenho) =========== 
+void taskRedeLoop(void *pvParameters) {
+  for (;;) {
+
+    loopRede(); 
+    // Watchdog
+    vTaskDelay(1 / portTICK_PERIOD_MS); 
+  }
 }
 
 #endif

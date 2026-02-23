@@ -4,11 +4,11 @@
 #include <Arduino.h>
 #include "freertos/queue.h"
 
-// ================= REDE =================
+// ================ REDE =================
 const char* ssid = "mr robot";     
 const char* password = "robot1234";     
 
-// ================= PINAGEM =================
+// =============== PINAGEM =================
 // Motores
 #define motor_esquerdo 16
 #define motor_direito 17
@@ -24,11 +24,12 @@ const char* password = "robot1234";
 #define ledSonarEsquerdo 4
 #define ledSonarDireito 25
 
-// Constantes de ajuste
+// Constantes
 const int ACELERACAO = 12;        // O quanto aumenta a velocidade 
-const int TEMPO_ACELERACAO = 15; // Tempo entre uma aceleração e outra
-const int DISTANCIA_SEGURA = 12;
-// =========== VARIÁVEIS VOLATILE =================
+const int TEMPO_ACELERACAO = 15;  // Tempo entre acelerações
+const int DISTANCIA_SEGURA = 12;  // Distancia segura dos sensores
+
+// ========== VARIÁVEIS VOLATILE ==============
 // volatile é obrigatório para variáveis usadas por núcleos diferentes
 
 // Comandos
@@ -40,20 +41,19 @@ volatile bool obstaculoDetectado = false;
 volatile int joyX = 0;
 volatile int joyY = 0;
 
-// Flags de modo
-// true = Para e trava, false = Espera 1seg e libera
-volatile bool modoSegurancaTotal = true; 
+// ============= FLAGS VOLATILE ===============
+volatile bool modoSegurancaTotal = true; // true = trava | false = libera
 
-// true = Giro, false = Curva
-volatile bool modoGiro360 = false; 
+volatile bool modoGiro360 = false; // true = Giro | false = Curva
 
-// Auxiliar para contar tempo
+// Contar tempo auxiliar
 volatile unsigned long tempoObstaculoDetectado = 0;
 
-// O usuario escolhe a velocidade maxima
+// Velocidade maxima
 volatile int limitePwmGlobal = 255;
-// =========== OBJETOS EXTERNOS =================
-// É apenas para mostrar que esses objetos existem em outros arquivos
+// ===========================================
+
+// Aqui é apenas para mostrar que ele existe em outros arquivos
 extern QueueHandle_t filaComandos; 
 
 #endif

@@ -2,16 +2,16 @@
 #define HARDWARE_CORE_H
 
 #include "Config.h"
-#include "Sensors.h"
-#include "Motors.h"
+#include "Sensores.h"
+#include "Motores.h"
 #include "GerServer.h"
 
-// Variável local para saber o último comando
+// Variável para saber o último comando
 char comandoAtual = 'S';
 
 
 void aplicarMotores() {
-  // 1. Processa Fila de Comandos
+  // Processa Fila de Comandos
   char cmd;
   if (xQueueReceive(filaComandos, &cmd, 0) == pdTRUE) {
       // Comandos de Configuração
@@ -23,14 +23,14 @@ void aplicarMotores() {
       comandoAtual = cmd; 
   }
 
-  // 2. SEGURANÇA (Se detectar obstáculo, corta motor)
+  // Se detectar obstáculo, corta motor
   if (obstaculoDetectado) {
       if (modoSegurancaTotal) {
-          Stop(); // Zera PWM
+          Stop(); 
           return; 
       } 
       else {
-          // Modo Destravado: Para por 1s, depois libera
+          // Modo Destravado
           if (tempoObstaculoDetectado == 0) tempoObstaculoDetectado = millis();
           if (millis() - tempoObstaculoDetectado < 1000) {
               Stop();
@@ -41,14 +41,15 @@ void aplicarMotores() {
       tempoObstaculoDetectado = 0;
   }
 
-  // 3. EXECUÇÃO DE MOVIMENTO
+  // Movimentação
   if (comandoAtual == 'J') {
-      // === AQUI ACONTECE A MÁGICA DO JOYSTICK ===
+      // ========== JOYSTICK =============
       // Passa os valores globais joyX/joyY para a função do Motors.h
       moverComJoystick(joyX, joyY);
   } 
   else {
-      // === MODO BOTÕES/TECLADO (Com Rampa) ===
+
+      // Teclado
       switch(comandoAtual) {
           case 'F': Frente(); break;
           case 'B': Back(); break;
@@ -57,31 +58,29 @@ void aplicarMotores() {
           case 'S': Parar(); break;
       }
       
-      // Só aplica a rampa suave se NÃO estiver em modo Joystick
-      // e se não estiver numa curva suave manual
+      // aplica a aceleração suave se NÃO estiver em modo Joystick ou curva suave
       if (!(!modoGiro360 && (comandoAtual == 'L' || comandoAtual == 'R'))) {
-          loopMotors();
+          loopMotores();
       }
   }
 }
 
 
-
-// === TAREFA DO NÚCLEO 0 ===
+// ========== Tarefa do Nucleo 0 (1 mudar nucleo depois par ver desempenho) ======== 
 void taskHardware(void * parameter) {
   
-  setupMotor();  
+  setupMotores();  
   setupSensores(); 
   
-  for(;;) { // Loop Infinito
+  for(;;) { // Para o loop infinito
     
-    // 1. Verifica Segurança (atualiza obstaculoDetectado)
-    checkSafety(); 
+    // Verifica safe
+    checkSafe(); 
     
-    // 2. Controla Motores
+    // Controla motores
     aplicarMotores();
 
-    // 3. Respiro do Watchdog
+    // Watchdog
     vTaskDelay(10 / portTICK_PERIOD_MS); 
   }
 }

@@ -1,5 +1,5 @@
-#ifndef MOTORS_H
-#define MOTORS_H
+#ifndef MOTORES_H
+#define MOTORES_H
 
 #include "Config.h"
 
@@ -9,7 +9,7 @@ int velocidadeAtualDir = 0;
 int velocidadeAlvo = 0;
 unsigned long ultima_aceleracao = 0;
 
-void setupMotor() { // Nome no plural
+void setupMotores() { 
   pinMode(motor_esquerdo, OUTPUT);
   pinMode(motor_direito, OUTPUT);
   pinMode(pwm_esquerdo, OUTPUT);
@@ -72,13 +72,13 @@ void Gira(bool esquerda) {
       analogWrite(pwm_esquerdo, velocidadeAlvo);
       analogWrite(pwm_direito, 0);
     }
-    return; // Retorna para o loopMotors não sobrescrever imediatamente
+    return; // Retorna para o loopMotores não sobrescrever imediatamente
   }
 }
 
 // === O LOOP DA MOVIMENTAÇÃO ===
 // Isso roda no loop do HardwareCore
-void loopMotors() {
+void loopMotores() {
   if (millis() - ultima_aceleracao > TEMPO_ACELERACAO) {
     ultima_aceleracao = millis();
     
