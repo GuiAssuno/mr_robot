@@ -4,56 +4,45 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
-#include <ESPmDNS.h>
+#include <DNSServer.h> // <--- Biblioteca Mágica do DNS
 #include "Config.h"
 #include "WebPage.h"      
 #include "HardwareCore.h" 
 
-// Instância do WebSocket (porta 81)
+// Instância do WebSocket
 WebSocketsServer webSocket = WebSocketsServer(81);
 extern WebServer server;
 
+// Instância do Servidor DNS (Para o truque do nome)
+DNSServer dnsServer;
+
 // ==========================================
-// 1. EVENTO DO WEBSOCKET (Ouve o Cliente)
+// 1. EVENTO DO WEBSOCKET
 // ==========================================
 void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   if (type == WStype_TEXT) {
     char* texto = (char*) payload;
 
-    // --- JOYSTICK ---
+    // --- LÓGICA DO JOYSTICK ---
     if (payload[0] == 'J') {
       int x, y;
-      // Extrai os números do texto
       if (sscanf(texto, "J:%d:%d", &x, &y) == 2) {
-        // Apenas ATUALIZA as variáveis globais (Config.h)
-        // O HardwareCore (Núcleo 0) é quem vai ler isso e mover os motores
         joyX = x;
         joyY = y;
-        
-        // Avisa o HardwareCore que estamos no modo Joystick
         char cmd = 'J'; 
         xQueueSend(filaComandos, &cmd, 0);
-         
       }
-    }
-
-    //--- VELOCIDADE ---
+    } 
+    // --- LÓGICA DE VELOCIDADE (V) ---
     else if (payload[0] == 'V') {
         int pct;
-        // Lê o valor percentual (ex: "V:80" -> pct = 80)
         if (sscanf(texto, "V:%d", &pct) == 1) {
-          // Trava entre 0 e 100 por segurança
           pct = constrain(pct, 0, 100);
-          
-          // Converte Porcentagem (0-100) para PWM Real (0-255)
-          // e atualiza a variável global que o motor usa.
           limitePwmGlobal = map(pct, 0, 100, 0, 255);
-          
-          Serial.printf("Novo limite de velocidade: %d%% (PWM: %d)\n", pct, limitePwmGlobal);
+          Serial.printf("Novo limite: %d%%\n", pct);
         }
-      }  
-
-    // --- BOTÕES ---
+    }  
+    // --- LÓGICA DE BOTÕES ---
     else {
       char cmd = (char)payload[0];
       xQueueSend(filaComandos, &cmd, 0);
@@ -62,57 +51,67 @@ void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t leng
 }
 
 // ==========================================
-// 2. SETUP DA REDE E SERVIDORES
+// 2. SETUP DA REDE (MODO ACCESS POINT)
 // ==========================================
-// (Renomeado para bater com o Main.ino)
 void setupRede() {
+  // Configura como Ponto de Acesso (Cria o Wi-Fi)
+  WiFi.mode(WIFI_AP);
+  
+  // Nome da Rede e Senha (se quiser aberta, tire a senha)
+  // Ex: "Mr Robot" e senha "robot1234"
+  WiFi.softAP(ssid, password); 
 
-  // 1. Conexão Wi-Fi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  // Aguarda iniciar
+  delay(100); 
+  
+  Serial.println("Rede Wi-Fi Criada!");
+  Serial.print("Nome (SSID): "); Serial.println(ssid);
+  Serial.print("IP do Robo: "); Serial.println(WiFi.softAPIP()); // Geralmente 192.168.4.1
 
-  Serial.print("Conectando ao Hotspot...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nConectado! IP: " + WiFi.localIP().toString());
-
-  // 2. Configura mDNS (http://superrobo.local)
-  if (MDNS.begin("superrobo")) {
-    Serial.println("MDNS iniciado! Acesse: http://superrobo.local");
-  }
+  // === O TRUQUE DO DNS ===
+  dnsServer.start(53, "*", WiFi.softAPIP());
 
   // 3. Rota da Página Principal
   server.on("/", []() {
     server.send(200, "text/html", html_page);
   });
+  
+  // Rota para Android detectar que é um portal (evita fechar sozinho)
+  server.on("/generate_204", []() {
+    server.send(200, "text/html", html_page);
+  });
 
-  // 4. Rota para comandos HTTP (Backup se WebSocket falhar)
+  // Rota para iOS detectar portal
+  server.on("/hotspot-detect.html", []() {
+    server.send(200, "text/html", html_page);
+  });
+
+  // Comandos HTTP Legado
   server.on("/command", []() {
-    if (server.hasArg("cmd")) { // Usa "cmd" conforme seu Javascript novo
+    if (server.hasArg("cmd")) { 
       String c = server.arg("cmd");
-      char cmd = c.charAt(0); // Pega a primeira letra
-      
-      xQueueSend(filaComandos, &cmd, 0); // Envia para o Núcleo 0
+      char cmd = c.charAt(0); 
+      xQueueSend(filaComandos, &cmd, 0); 
       server.send(200, "text/plain", "OK");
     } else {
       server.send(400, "text/plain", "Erro");
     }
   });
 
-  // 5. Inicia Serviços
   server.begin();
   webSocket.begin();
   webSocket.onEvent(onWebSocketEvent);
   
-  Serial.println("Servidor HTTP e WebSocket iniciados.");
+  Serial.println("Sistemas Iniciados. Conecte no Wi-Fi do robo e acesse 192.168.4.1 ou http://robo.com");
 }
 
 // ==========================================
-// 3. LOOP DA REDE (Mantém tudo vivo)
+// 3. LOOP DA REDE
 // ==========================================
 void loopRede() {
+  // Processa pedidos de DNS (Redireciona o nome para o IP)
+  dnsServer.processNextRequest();
+  
   server.handleClient();
   webSocket.loop();
 }

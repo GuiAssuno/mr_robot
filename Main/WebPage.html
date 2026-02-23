@@ -40,6 +40,9 @@
         .btn-right { grid-column: 3; grid-row: 2; }
         .btn-down { grid-column: 2; grid-row: 2; }
         .control-label { text-align: center; font-weight: bold; color: #666; margin-top: 3px; font-size: 0.7rem; }
+        .btn-stop {background: #dc3545; color: white; border-color: #b02a37; transition: background-color 0.3s;}
+        .btn-stop.livre {background: #28a745 !important; border-color: #198754 !important;
+        }
 
         /* JOYSTICK */
         .joystick-container { position: relative; width: 90px; height: 90px; background: radial-gradient(circle, #f8f9fa 0%, #e9ecef 100%); border: 2px solid #adb5bd; border-radius: 50%; margin: 10px auto; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1); transition: border-color 0.2s ease; touch-action: none; }
@@ -82,6 +85,10 @@
 <body>
     <div class="container">        
         <div class="mode-display">
+            <div class="cam-config">
+                IP Câmera: <input type="text" id="camIP" class="cam-input" placeholder="192.168.x.x">
+                <button class="cam-btn" onclick="updateCamera()">OK</button>      
+        <div class="mode-display">
             <div class="header">
                 <h1>Controle ESP32 <span id="status" class="status">Off</span></h1>
             </div>
@@ -115,7 +122,7 @@
             </div>
             <div class="side-controls">
                 <button class="control-btn btn-stop" id="btnStop">X</button>
-                <div class="control-label">DESBLOQ</div>
+                <div class="control-label" id="lblLock">TRAVADO</div>
                 <button class="control-btn btn-speed" id="btnSpeedDownAlt">⇩</button>
                 <div class="control-label">REDUZIR</div>
             </div>
@@ -162,7 +169,9 @@
     </div>
 
 <script>
-    // ===== WEBSOCKET ENGINE (O Cérebro Rápido) =====
+    
+    var estadoTravado = true; 
+    var estadoGiro360 = false;
     var ws;
     var lastSend = 0;
     var currentSpeedPct = 100;
@@ -176,6 +185,7 @@
             s.innerText = 'On';
             s.classList.add('connected');
         };
+        
         ws.onclose = function() {
             var s = document.getElementById('status');
             s.innerText = 'Off';
@@ -191,13 +201,21 @@
         }
     }
 
+    function cmd(c) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "/command?cmd=" + c, true);
+        xhr.send();
+    }
+
     // Controle de Velocidade
     function changeSpeed(delta) {
         currentSpeedPct += delta;
         if (currentSpeedPct > 100) currentSpeedPct = 100;
         if (currentSpeedPct < 10) currentSpeedPct = 10;
-        
-        document.getElementById('speedValue').innerText = currentSpeedPct + "%";
+
+        var display = document.getElementById('speedValue');
+        if(display) display.innerText = currentSpeedPct + "%";
+
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send("V:" + currentSpeedPct);
         }
@@ -210,9 +228,40 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send("J:" + Math.round(x) + ":" + Math.round(y));
             }
+            
+            document.getElementById('speedValue').innerText = currentSpeedPct + "%";
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send("V:" + currentSpeedPct);
+            }
+            
             lastSend = now;
         }
     }
+
+        // ===== LÓGICA DE CÂMERA MANUAL =====
+        function updateCamera() {
+            var ip = document.getElementById('camIP').value;
+            if(ip.length > 7) { // Validação mínima
+                var url = 'http://' + ip + ':81/stream';
+                
+                // Salva no navegador para não precisar digitar de novo
+                localStorage.setItem('mrRobotCamIP', ip);
+                
+                // Atualiza as imagens
+                var imgs = ['cameraStreamDesktop', 'cameraStreamPortrait', 'cameraStreamLandscape'];
+                imgs.forEach(id => {
+                    var el = document.getElementById(id);
+                    if(el) {
+                        el.src = url;
+                        // Esconde o texto de status
+                        var statusId = id.replace('cameraStream', 'videoStatus');
+                        var st = document.getElementById(statusId);
+                        if(st) st.style.display = 'none';
+                    }
+                });
+            }
+        }
 
     // ===== LÓGICA DO JOYSTICK (Multitouch Real) =====
     function setupJoystick(containerId, knobId, type) {
@@ -256,11 +305,19 @@
         function reset() {
             touchId = null;
             knob.style.transform = `translate(-50%, -50%)`;
+            
+            // Zera o valor deste joystick específico
             joyState[type] = { x: 0, y: 0 };
             
+            // LÓGICA DE PARADA IMEDIATA
             if (window.innerHeight < window.innerWidth && window.innerWidth < 900) {
+                 // Modo Paisagem (Dois Joysticks)
+                 // Quando solta um, ele manda 0 para aquele eixo, 
+                 // mas mantém o valor do outro eixo se o outro dedo ainda estiver lá.
                  sendJoy(joyState.right.x, joyState.left.y);
             } else {
+                 // Modo Retrato/Desktop (Um Joystick)
+                 // Soltou? Manda 0,0 (PARAR TUDO)
                  sendJoy(0, 0);
             }
         }
@@ -296,16 +353,66 @@
         window.addEventListener('mouseup', function(e) { if(isMouseDown) { isMouseDown = false; reset(); } });
     }
 
+    function atualizarVisualTrava() {
+        // Pega todos os botões de trava (Desktop e Mobile)
+        var btns = [document.getElementById('btnStop'), document.getElementById('btnStopPortrait'), document.getElementById('btnStopLandscape')];
+        // Pega o label (texto embaixo) - Só o do Desktop tem label visível no seu layout original, mas atualizamos se houver
+        var lbl = document.getElementById('lblLock');
+
+        btns.forEach(btn => {
+            if (!btn) return;
+            if (estadoTravado) {
+                // Modo TRAVADO: Vermelho, Texto X ou Cadeado
+                btn.classList.remove('livre'); // Remove o verde
+                btn.innerText = "X"; // Ou icone de cadeado fechado
+            } else {
+                // Modo LIVRE: Verde
+                btn.classList.add('livre'); // Adiciona o verde
+                btn.innerText = "OK"; // Ou icone de cadeado aberto
+            }
+        });
+
+        if (lbl) {
+            lbl.innerText = estadoTravado ? "TRAVADO" : "LIVRE";
+            lbl.style.color = estadoTravado ? "#dc3545" : "#28a745"; // Muda cor do texto também
+        }
+    }
+
+    // Função para atualizar visual do MODO
+    function atualizarVisualModo() {
+        var lbl = document.getElementById('modeText'); // Texto lá no topo
+        var texto = estadoGiro360 ? "GIRO" : "CURVA";
+        if (lbl) lbl.innerText = texto;
+    }
+
+    // Funções de Clique (Substituem os onClicks antigos)
+    function toggleTrava() {
+        estadoTravado = !estadoTravado; // Inverte
+        send('X'); // Manda comando pro robô
+        atualizarVisualTrava(); // Atualiza tela
+    }
+
+    function toggleModo() {
+        estadoGiro360 = !estadoGiro360; // Inverte
+        send('A'); // Manda comando pro robô
+        atualizarVisualModo(); // Atualiza tela
+    }
+
     // ===== INICIALIZAÇÃO =====
     window.onload = function() {
         initWS();
         
         // Configura Câmera Dinâmica (IP Automático)
-        var camURL = 'http://' + location.hostname + ':81/stream'; 
-        document.getElementById('cameraStreamDesktop').src = camURL;
-        document.getElementById('videoStatusDesktop').style.display = 'none'; // Esconde status se carregar
-        document.getElementById('cameraStreamPortrait').src = camURL;
-        document.getElementById('cameraStreamLandscape').src = camURL;
+        var savedIP = localStorage.getItem('mrRobotCamIP');
+        
+        if(savedIP) {
+            document.getElementById('camIP').value = savedIP;
+            document.getElementById('cameraStreamDesktop').src = savedIP;
+            document.getElementById('videoStatusDesktop').style.display = 'none'; // Esconde status se carregar
+            document.getElementById('cameraStreamPortrait').src = savedIP;
+            document.getElementById('cameraStreamLandscape').src = savedIP;
+            updateCamera(); // Tenta conectar automático
+        }
 
         // Inicia Joysticks
         setupJoystick('centerJoystick', 'centerKnob', 'center'); 
@@ -325,9 +432,22 @@
         
         // Helper para botões de clique simples
         function clickLink(id, cmd) {
+            var setupBtn = function(id, func) {
             var el = document.getElementById(id);
-            if(!el) return;
-            el.onclick = function() { send(cmd); };
+            if(el) el.onclick = func;
+            };
+
+            setupBtn('btnMode', toggleModo);
+            setupBtn('btnStop', toggleTrava);
+            
+            setupBtn('btnModePortrait', toggleModo);
+            setupBtn('btnStopPortrait', toggleTrava);
+            
+            setupBtn('btnModeLandscape', toggleModo);
+            setupBtn('btnStopLandscape', toggleTrava);
+
+            atualizarVisualTrava();
+            atualizarVisualModo();
         }
         
         // Helper para Velocidade
