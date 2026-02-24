@@ -201,12 +201,6 @@
         }
     }
 
-    function cmd(c) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "/command?cmd=" + c, true);
-        xhr.send();
-    }
-
     // Controle de Velocidade
     function changeSpeed(delta) {
         currentSpeedPct += delta;
