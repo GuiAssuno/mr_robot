@@ -215,7 +215,7 @@
         }
     }
 
-    // Envia Joystick com Throttle (50ms)
+    // Envia Joystick (50ms)
     function sendJoy(x, y) {
         var now = Date.now();
         if (now - lastSend > 50) { 
@@ -223,11 +223,11 @@
                 ws.send("J:" + Math.round(x) + ":" + Math.round(y));
             }
             
-            document.getElementById('speedValue').innerText = currentSpeedPct + "%";
+            // document.getElementById('speedValue').innerText = currentSpeedPct + "%";
             
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send("V:" + currentSpeedPct);
-            }
+            // if (ws && ws.readyState === WebSocket.OPEN) {
+            //     ws.send("V:" + currentSpeedPct);
+            // }
             
             lastSend = now;
         }
@@ -257,7 +257,7 @@
             }
         }
 
-    // ===== LÓGICA DO JOYSTICK (Multitouch Real) =====
+    // ===== LÓGICA DO JOYSTICK =====
     function setupJoystick(containerId, knobId, type) {
         const container = document.getElementById(containerId);
         const knob = document.getElementById(knobId);

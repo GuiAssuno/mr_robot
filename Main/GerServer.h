@@ -101,9 +101,7 @@ void setupRede() {
   //Serial.println("acesse 192.168.4.1 ou http://robo.com");
 }
 
-// 
 // ============ Loop da Rede ==============
-
 void loopRede() {
   // Redireciona o nome para o IP
   dnsServer.processNextRequest();

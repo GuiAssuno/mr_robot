@@ -214,12 +214,6 @@ const char* html_page = R"rawliteral(
         }
     }
 
-    function cmd(c) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "/command?cmd=" + c, true);
-        xhr.send();
-    }
-
     // Controle de Velocidade
     function changeSpeed(delta) {
         currentSpeedPct += delta;
@@ -234,7 +228,7 @@ const char* html_page = R"rawliteral(
         }
     }
 
-    // Envia Joystick com Throttle (50ms)
+    // Envia Joystick (50ms)
     function sendJoy(x, y) {
         var now = Date.now();
         if (now - lastSend > 50) { 
@@ -276,7 +270,7 @@ const char* html_page = R"rawliteral(
             }
         }
 
-    // ===== LÓGICA DO JOYSTICK (Multitouch Real) =====
+    // ===== LÓGICA DO JOYSTICK =====
     function setupJoystick(containerId, knobId, type) {
         const container = document.getElementById(containerId);
         const knob = document.getElementById(knobId);

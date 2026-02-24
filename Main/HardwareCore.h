@@ -65,7 +65,6 @@ void aplicarMotores() {
   }
 }
 
-
 // ========== Tarefa do Nucleo 0 (1 mudar nucleo depois par ver desempenho) ======== 
 void taskHardware(void * parameter) {
   
