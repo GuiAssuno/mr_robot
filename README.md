@@ -1,4 +1,4 @@
-# Robô Autônomo e Controlado Remotamente (Seguidor de Linha com Visão)
+# Mr. Robot
 
 Um projeto multidisciplinar de robótica envolvendo engenharia mecânica (impressão 3D), eletrônica e programação de sistemas embarcados (RTOS). Este protótipo é um robô de esteira projetado para operar tanto como seguidor de linha autônomo quanto como veículo controlado remotamente, contando com transmissão de vídeo em tempo real e sistemas de segurança anti-colisão.
 
